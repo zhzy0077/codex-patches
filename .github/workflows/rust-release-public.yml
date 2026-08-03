@@ -1,0 +1,115 @@
+name: vendored upstream rust release (public unsigned)
+
+on:
+  workflow_call:
+    inputs:
+      upstream_tag:
+        description: Exact openai/codex release tag to fetch and patch.
+        required: true
+        type: string
+      release_tag:
+        description: Patched release tag being prepared.
+        required: true
+        type: string
+
+concurrency:
+  group: patched-codex-release-build
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build ${{ matrix.artifact }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        # This matrix follows the upstream primary/app-server and Windows
+        # helper binary sets, combined per public runner to avoid duplicate
+        # source preparation. See vendor/openai-codex/SOURCE.yaml.
+        include:
+          - runner: ubuntu-24.04
+            target: x86_64-unknown-linux-musl
+            artifact: linux-x86_64
+            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server bwrap"
+          - runner: macos-14
+            target: aarch64-apple-darwin
+            artifact: macos-arm64
+            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
+          - runner: macos-13
+            target: x86_64-apple-darwin
+            artifact: macos-x86_64
+            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
+          - runner: windows-2022
+            target: x86_64-pc-windows-msvc
+            artifact: windows-x86_64
+            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server codex-windows-sandbox-setup codex-command-runner"
+
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Fetch exact upstream tag and apply patches
+        shell: bash
+        env:
+          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          work_dir="${GITHUB_WORKSPACE}/.build/${{ matrix.artifact }}"
+          source_dir="${work_dir}/upstream"
+          mkdir -p "${work_dir}"
+          scripts/fetch-upstream.sh --tag "${UPSTREAM_TAG}" --destination "${source_dir}"
+          scripts/apply-patches.sh --source-dir "${source_dir}"
+
+      - if: runner.os == 'Linux'
+        name: Install upstream musl build tools
+        shell: bash
+        env:
+          TARGET: ${{ matrix.target }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -y
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends binutils
+          GITHUB_ENV="${GITHUB_ENV}" TARGET="${TARGET}" \
+            bash "${GITHUB_WORKSPACE}/vendor/openai-codex/scripts/install-musl-build-tools.sh"
+
+      - if: runner.os == 'Linux'
+        name: Install Zig for upstream musl build
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
+        with:
+          version: 0.14.0
+          use-cache: false
+
+      - name: Configure upstream rusty_v8 artifacts
+        uses: ./.github/actions/setup-rusty-v8-public
+        with:
+          source-dir: ${{ github.workspace }}/.build/${{ matrix.artifact }}/upstream
+          target: ${{ matrix.target }}
+
+      - name: Build and package with upstream helpers
+        shell: bash
+        env:
+          UPSTREAM_TAG: ${{ inputs.upstream_tag }}
+        run: |
+          set -euo pipefail
+          work_dir="${GITHUB_WORKSPACE}/.build/${{ matrix.artifact }}"
+          scripts/build-patched.sh \
+            --tag "${UPSTREAM_TAG}" \
+            --target "${{ matrix.target }}" \
+            --source-dir "${work_dir}/upstream" \
+            --binaries "${{ matrix.binaries }}" \
+            --bundle all \
+            --work-dir "${work_dir}" \
+            --output-dir "${GITHUB_WORKSPACE}/dist/${{ matrix.artifact }}"
+
+      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        with:
+          name: patched-codex-${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}/*
+          if-no-files-found: error

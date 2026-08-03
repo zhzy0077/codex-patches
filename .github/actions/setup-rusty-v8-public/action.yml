@@ -1,0 +1,54 @@
+name: setup-rusty-v8-public
+description: Adapted public-runner form of the vendored upstream rusty_v8 action.
+inputs:
+  source-dir:
+    description: Prepared upstream openai/codex checkout.
+    required: true
+  target:
+    description: Rust target triple with Codex-built V8 release artifacts.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Configure upstream rusty_v8 artifact overrides and verify checksums
+      shell: bash
+      env:
+        SOURCE_DIR: ${{ inputs.source-dir }}
+        TARGET: ${{ inputs.target }}
+      run: |
+        set -euo pipefail
+
+        version="$(python3 "${SOURCE_DIR}/.github/scripts/rusty_v8_bazel.py" resolved-v8-crate-version)"
+        release_tag="rusty-v8-v${version}"
+        base_url="https://github.com/openai/codex/releases/download/${release_tag}"
+        binding_dir="${RUNNER_TEMP}/rusty_v8"
+        profile="ptrcomp_sandbox_release"
+
+        if [[ "${TARGET}" == *-pc-windows-msvc ]]; then
+          archive_name="rusty_v8_${profile}_${TARGET}.lib.gz"
+        else
+          archive_name="librusty_v8_${profile}_${TARGET}.a.gz"
+        fi
+        binding_name="src_binding_${profile}_${TARGET}.rs"
+        checksums_name="rusty_v8_${profile}_${TARGET}.sha256"
+        archive_path="${binding_dir}/${archive_name}"
+        binding_path="${binding_dir}/${binding_name}"
+        checksums_path="${binding_dir}/${checksums_name}"
+
+        mkdir -p "${binding_dir}"
+        curl -fsSL "${base_url}/${archive_name}" -o "${archive_path}"
+        curl -fsSL "${base_url}/${binding_name}" -o "${binding_path}"
+        curl -fsSL "${base_url}/${checksums_name}" -o "${checksums_path}"
+
+        if [[ "$(wc -l < "${checksums_path}")" -ne 2 ]]; then
+          echo "Expected exactly two checksums for ${TARGET}" >&2
+          exit 1
+        fi
+        if command -v sha256sum >/dev/null 2>&1; then
+          (cd "${binding_dir}" && sha256sum -c "${checksums_path}")
+        else
+          (cd "${binding_dir}" && shasum -a 256 -c "${checksums_path}")
+        fi
+        echo "RUSTY_V8_ARCHIVE=${archive_path}" >> "${GITHUB_ENV}"
+        echo "RUSTY_V8_SRC_BINDING_PATH=${binding_path}" >> "${GITHUB_ENV}"

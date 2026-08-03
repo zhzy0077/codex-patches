@@ -1,0 +1,12 @@
+repository: openai/codex
+tag: rust-v0.146.0
+commit: e363b08c9175ac1cbe5893615dd2cb9ddf95043b
+retrieved: 2026-08-03
+files:
+  - workflows/rust-release.yml
+  - workflows/rust-release-windows.yml
+  - actions/setup-rusty-v8/action.yml
+  - scripts/archive-release-symbols-and-strip-binaries.sh
+  - scripts/build-codex-package-archive.sh
+  - scripts/install-musl-build-tools.sh
+  - scripts/rusty_v8_bazel.py

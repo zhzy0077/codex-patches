@@ -57,63 +57,15 @@ jobs:
           echo "Build required: ${should_build}"
 
   build:
-    name: Build ${{ matrix.target }}
+    name: Build patched upstream release
     needs: discover
     if: needs.discover.outputs.should_build == 'true'
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - runner: ubuntu-latest
-            target: x86_64-unknown-linux-musl
-            artifact: linux-x86_64
-            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
-          - runner: macos-14
-            target: aarch64-apple-darwin
-            artifact: macos-arm64
-            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
-          - runner: macos-13
-            target: x86_64-apple-darwin
-            artifact: macos-x86_64
-            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
-          - runner: windows-2022
-            target: x86_64-pc-windows-msvc
-            artifact: windows-x86_64
-            binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server codex-windows-sandbox-setup codex-command-runner"
-    steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-      - uses: dtolnay/rust-toolchain@e081816240890017053eacbb1bdf337761dc5582 # 1.95.0
-        with:
-          targets: ${{ matrix.target }}
-      - if: runner.os == 'Linux'
-        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2.2.1
-        with:
-          version: 0.14.0
-          use-cache: false
-      - name: Build and package patched binaries
-        shell: bash
-        env:
-          UPSTREAM_TAG: ${{ needs.discover.outputs.upstream_tag }}
-        run: |
-          set -euo pipefail
-          mkdir -p "${GITHUB_WORKSPACE}/.build"
-          scripts/build-patched.sh \
-            --tag "${UPSTREAM_TAG}" \
-            --target "${{ matrix.target }}" \
-            --binaries "${{ matrix.binaries }}" \
-            --work-dir "${GITHUB_WORKSPACE}/.build/${{ matrix.artifact }}" \
-            --output-dir "${GITHUB_WORKSPACE}/dist/${{ matrix.artifact }}"
-      - uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
-        with:
-          name: patched-codex-${{ matrix.artifact }}
-          path: dist/${{ matrix.artifact }}/*
-          if-no-files-found: error
+    uses: ./.github/workflows/rust-release-public.yml
+    with:
+      upstream_tag: ${{ needs.discover.outputs.upstream_tag }}
+      release_tag: ${{ needs.discover.outputs.release_tag }}
 
   publish:
     name: Publish patched release

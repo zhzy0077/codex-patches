@@ -1,91 +1,83 @@
-# Patched Codex builds
+# Patched Codex releases
 
-This repository applies a small, reviewable patch set to tagged releases of
-[openai/codex](https://github.com/openai/codex). The current patch allows a
-provider that advertises GPT-5.6 Responses Lite hosted tools to receive hosted
-`web_search` in `/responses`. Guardian-reviewer sessions remain excluded, and
-the standalone `/alpha/search` path is unchanged.
+This repository contains patch files only. Releases fetch an exact
+`openai/codex` tag, apply every patch in `patches/`, and build the patched
+checkout on public GitHub-hosted runners.
 
-## Releases and usage
+## Vendored upstream release flow
 
-The scheduled workflow runs daily and can also be started with
-`workflow_dispatch`. It reads the latest upstream GitHub release, builds it only
-when the corresponding `UPSTREAM_TAG-patched.1` release does not already exist,
-and publishes four unsigned platform artifacts containing the same executable
-families as the upstream release:
+`vendor/openai-codex/` records the upstream tag and commit in `SOURCE.yaml` and
+retains the complete upstream `rust-release.yml` and
+`rust-release-windows.yml`, plus the upstream rusty_v8, musl, symbol, and
+package helpers. The active `.github/workflows/build-release.yml` is only a
+daily/manual discover-and-publish wrapper; it calls the adapted reusable
+`.github/workflows/rust-release-public.yml`, which follows that vendored
+matrix and invokes the vendored upstream helpers.
 
-- Linux x86_64 (`x86_64-unknown-linux-musl`)
-- macOS arm64 (`aarch64-apple-darwin`)
-- macOS x86_64 (`x86_64-apple-darwin`)
-- Windows x86_64 (`x86_64-pc-windows-msvc`)
+Refresh the vendored snapshot when adopting a new upstream release:
 
-Extract the platform archive from the matching GitHub release and put
-`codex` (or `codex.exe`) on `PATH`. Archives also contain `codex-app-server`,
-the code-mode host, Responses API proxy, and the Linux `bwrap` helper where
-applicable. Windows archives also contain the Windows sandbox helpers. Verify
-`SHA256SUMS` before use. These are community builds: this repository does not
-provide official signing, notarization, provenance, or support from OpenAI.
+```bash
+scripts/refresh-upstream-release-workflow.sh --tag rust-v0.146.0
+```
 
-The workflow uses only public upstream sources and the repository's
-`GITHUB_TOKEN`; no application secrets are required. Existing releases are
-never overwritten. If a build fails before publishing, rerunning the workflow
-rebuilds the missing release. Release numbering currently reserves `.1` for
-the single patch revision; use a new patch revision in the workflow and
-release tag if the patch set changes incompatibly.
+Review the resulting `SOURCE.yaml` and workflow diff. The build still fetches
+the exact tag independently, so the vendored workflow snapshot cannot
+silently select source from another revision.
 
-## Local build
+## Public-runner adaptations
 
-The scripts use Bash, Git, curl, Python 3, and Cargo. Build from this
-repository:
+The official workflows require private runner labels and signing services.
+This repository intentionally:
+
+- uses public `ubuntu-24.04`, `macos-14`, `macos-13`, and `windows-2022` runners;
+- removes signing, notarization, Linux cosign, R2, npm, DotSlash publication,
+  and private-runner jobs;
+- combines upstream primary/app-server/helper builds per public runner while
+  retaining the upstream binary set;
+- preserves the MSVC linker workaround
+  `/NODEFAULTLIB:libucrt.lib` plus `ucrt.lib`;
+- publishes unsigned `tar.gz` package archives, metadata, and per-target
+  SHA-256 manifests as GitHub release assets.
+
+Artifacts are community builds, not OpenAI releases. They are unsigned,
+unnotarized, and have no OpenAI provenance or support. SDK wheels, symbols,
+desktop applications, and private signing infrastructure are intentionally
+not published.
+
+## Release behavior
+
+The schedule runs daily and `workflow_dispatch` is available. The latest
+upstream release is resolved through GitHub, then released as
+`<upstream-tag>-patched.1`. If that release already exists it is left
+unchanged; a failed build can be rerun without overwriting an existing
+release.
+
+## Local validation/build
+
+Requirements are Bash, Git, curl, Python 3, Cargo, and the platform toolchain.
+The local wrapper uses the same upstream package helper:
 
 ```bash
 tag="$(scripts/latest-upstream-tag.sh)"
 scripts/build-patched.sh \
   --tag "$tag" \
   --target x86_64-unknown-linux-musl \
+  --binaries "codex codex-code-mode-host codex-responses-api-proxy codex-app-server bwrap" \
   --work-dir .build/linux-x86_64 \
   --output-dir dist/linux-x86_64
 ```
 
-The Linux musl build additionally needs a working C toolchain, `pkg-config`,
-`libcap` development files, Zig 0.14, and permission to install the upstream
-musl build dependencies. macOS and Windows should be built on their native
-runner/host with the target triple shown above. Builds download the exact
-prebuilt `rusty_v8` archive and binding for the checked-out `Cargo.lock`
-version, and verify their SHA-256 manifest.
+Linux musl builds additionally need Zig 0.14, a working C toolchain, and the
+dependencies installed by the vendored upstream musl helper. macOS and
+Windows builds should run on native hosts. Use a new work directory for each
+attempt.
 
-Set `CODEX_PRIMARY_BINARIES` or pass `--binaries` to select a different
-space-separated Cargo binary list. `CODEX_INCLUDE_BWRAP=false` omits the Linux
-helper; it defaults to included for Linux targets. A work directory is
-intentionally required to be new so a failed or partially patched checkout
-cannot be reused accidentally.
+Patch maintenance is intentionally separate from workflow refresh:
 
-## Patch maintenance
+```bash
+scripts/fetch-upstream.sh --tag TAG --destination .build/upstream
+scripts/apply-patches.sh --source-dir .build/upstream
+```
 
-Patch files in `patches/` are applied in bytewise filename order with
-`git apply --unidiff-zero --check --whitespace=error` before each application.
-To update:
-
-1. Choose the new upstream release tag.
-2. Fetch it with `scripts/fetch-upstream.sh`.
-3. Edit the upstream checkout, keeping the change focused.
-4. Generate or refresh a numbered patch with `git diff`.
-5. Validate it against a clean checkout using
-   `scripts/apply-patches.sh`.
-
-The current patch intentionally changes only the hosted tool-spec gate in
-`codex-rs/core/src/tools/spec_plan.rs`; do not broaden it to alter standalone
-search routing.
-
-## Limitations
-
-- The workflow follows the latest published upstream release, not arbitrary
-  commits or prereleases.
-- It builds the upstream release's executable families for each supported
-  platform, not SDK, package-manager artifacts, symbol archives, or desktop
-  applications.
-- Artifacts are unsigned and unnotarized. Users must independently assess
-  whether a community binary is appropriate for their environment.
-- Upstream dependencies, release assets, runner images, and build requirements
-  can change. A clean failure is preferred over silently producing a partial
-  artifact.
+Patch files are checked and applied in bytewise filename order with strict
+whitespace validation.
