@@ -133,6 +133,7 @@ done < "${v8_env_file}"
 export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
 if [[ "${target}" == "x86_64-pc-windows-msvc" ]]; then
   export LIBSQLITE3_FLAGS="${LIBSQLITE3_FLAGS:-SQLITE_DISABLE_INTRINSIC}"
+  export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=/NODEFAULTLIB:libucrt.lib -C link-arg=ucrt.lib"
 fi
 
 cargo_target_dir="${work_dir}/cargo-target"
