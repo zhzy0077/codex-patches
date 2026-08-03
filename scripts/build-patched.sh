@@ -133,7 +133,7 @@ done
 export CARGO_NET_GIT_FETCH_WITH_CLI="${CARGO_NET_GIT_FETCH_WITH_CLI:-true}"
 if [[ "${target}" == "x86_64-pc-windows-msvc" ]]; then
   export LIBSQLITE3_FLAGS="${LIBSQLITE3_FLAGS:-SQLITE_DISABLE_INTRINSIC}"
-  export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=/NODEFAULTLIB:libucrt.lib"
+  export RUSTFLAGS="${RUSTFLAGS:-} -C link-arg=/NODEFAULTLIB:libucrt.lib -C link-arg=/NODEFAULTLIB:ucrt.lib"
 fi
 
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-${work_dir}/cargo-target}"
