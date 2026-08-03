@@ -76,7 +76,10 @@ jobs:
           set -euo pipefail
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends binutils linux-libc-dev
-          echo "CFLAGS_x86_64_unknown_linux_musl=-I/usr/include" >> "${GITHUB_ENV}"
+          kernel_include="${RUNNER_TEMP}/linux-uapi"
+          mkdir -p "${kernel_include}"
+          cp -aL /usr/include/linux /usr/include/asm /usr/include/asm-generic "${kernel_include}/"
+          echo "CFLAGS_x86_64_unknown_linux_musl=-I${kernel_include}" >> "${GITHUB_ENV}"
           GITHUB_ENV="${GITHUB_ENV}" TARGET="${TARGET}" \
             bash "${GITHUB_WORKSPACE}/vendor/openai-codex/scripts/install-musl-build-tools.sh"
 
