@@ -76,6 +76,7 @@ jobs:
           set -euo pipefail
           sudo apt-get update -y
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends binutils linux-libc-dev
+          echo "CFLAGS_x86_64_unknown_linux_musl=-I/usr/include" >> "${GITHUB_ENV}"
           GITHUB_ENV="${GITHUB_ENV}" TARGET="${TARGET}" \
             bash "${GITHUB_WORKSPACE}/vendor/openai-codex/scripts/install-musl-build-tools.sh"
 
