@@ -1,0 +1,8 @@
+diff --git a/codex-rs/core/src/tools/spec_plan.rs b/codex-rs/core/src/tools/spec_plan.rs
+--- a/codex-rs/core/src/tools/spec_plan.rs
++++ b/codex-rs/core/src/tools/spec_plan.rs
+@@ -304,4 +303,0 @@ fn hosted_model_tool_specs(context: &CoreToolPlanContext<'_>) -> Vec<ToolSpec> {
+-    // Responses Lite accepts schemas for client-executed tools, not hosted Responses tools.
+-    if turn_context.model_info.use_responses_lite {
+-        return Vec::new();
+-    }
