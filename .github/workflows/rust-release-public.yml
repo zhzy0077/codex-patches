@@ -20,7 +20,7 @@ jobs:
   build:
     name: Build ${{ matrix.artifact }}
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 240
     permissions:
       contents: read
     strategy:
