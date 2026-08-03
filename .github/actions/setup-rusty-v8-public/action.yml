@@ -45,6 +45,7 @@ runs:
           echo "Expected exactly two checksums for ${TARGET}" >&2
           exit 1
         fi
+        sed -i 's/\r$//' "${checksums_path}"
         if command -v sha256sum >/dev/null 2>&1; then
           (cd "${binding_dir}" && sha256sum -c "${checksums_path}")
         else
