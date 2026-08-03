@@ -38,7 +38,7 @@ jobs:
             target: aarch64-apple-darwin
             artifact: macos-arm64
             binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
-          - runner: macos-13
+          - runner: macos-15-intel
             target: x86_64-apple-darwin
             artifact: macos-x86_64
             binaries: "codex codex-code-mode-host codex-responses-api-proxy codex-app-server"
